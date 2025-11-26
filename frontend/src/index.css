@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Baseball-themed design system */
+    --background: 0 0% 98%;
+    --foreground: 150 20% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 150 20% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 20% 15%;
+
+    /* Baseball field green */
+    --primary: 150 55% 25%;
+    --primary-foreground: 0 0% 98%;
+
+    /* Light field background */
+    --secondary: 120 15% 95%;
+    --secondary-foreground: 150 20% 15%;
+
+    /* Muted earth tones */
+    --muted: 30 15% 92%;
+    --muted-foreground: 30 8% 45%;
+
+    /* Baseball red accent */
+    --accent: 355 65% 45%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 30 12% 88%;
+    --input: 30 12% 88%;
+    --ring: 150 55% 25%;
+
+    --radius: 0.5rem;
+
+    /* Stat highlight colors */
+    --stat-excellent: 150 60% 35%;
+    --stat-good: 45 85% 50%;
+    --stat-average: 30 70% 55%;
+    --stat-poor: 0 70% 55%;
+
+    /* Table styles */
+    --table-header: 150 20% 94%;
+    --table-row-hover: 150 25% 97%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Stat number styling */
+  .stat-number {
+    @apply font-mono font-semibold tabular-nums;
+  }
+
+  /* Table enhancements */
+  .stats-table {
+    @apply w-full border-collapse;
+  }
+
+  .stats-table th {
+    @apply bg-[hsl(var(--table-header))] px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide;
+  }
+
+  .stats-table td {
+    @apply px-4 py-3 text-sm;
+  }
+
+  .stats-table tbody tr {
+    @apply border-b border-border transition-colors;
+  }
+
+  .stats-table tbody tr:hover {
+    @apply bg-[hsl(var(--table-row-hover))];
+  }
+}
