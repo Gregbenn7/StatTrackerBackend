@@ -1,15 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { Header } from "@/components/layout/Header";
 import { HitterLeaderboard } from "@/components/stats/HitterLeaderboard";
+import { TeamFilter } from "@/components/stats/TeamFilter";
 import { GameCard } from "@/components/games/GameCard";
 import { GameStorylineCard } from "@/components/games/GameStorylineCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockGames, mockStorylines } from "@/data/mockData";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BarChart3, Users, CalendarDays, Upload, AlertCircle, RefreshCw, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { uploadCSV, getTotals, PlayerStats, fetchTeams, fetchGames, fetchGameStorylines, createGameStorylines } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
@@ -17,128 +16,68 @@ import { Label } from "@/components/ui/label";
 import { UploadHistory } from "@/components/upload/UploadHistory";
 import { useUploadHistory } from "@/hooks/useUploadHistory";
 
+// Import new hooks
+import { useLeaderboard } from "@/hooks/useStats";
+import { useTeams } from "@/hooks/useTeams";
+import { useGames, useGameStorylines, useUploadGameCsv, useCreateGameStorylines } from "@/hooks/useGames";
+import type { UploadMetadata, LeaderboardEntry } from "@/types";
+
 const Dashboard = () => {
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState("leaderboard");
-  const [hitterStats, setHitterStats] = useState<PlayerStats[]>([]);
-  const [teams, setTeams] = useState<string[]>([]);
-  const [games, setGames] = useState<any[]>([]);
-  const [selectedStoryline, setSelectedStoryline] = useState<any>(null);
-  const [isLoadingStoryline, setIsLoadingStoryline] = useState(false);
-  const [storylineError, setStorylineError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingTeams, setIsLoadingTeams] = useState(false);
-  const [isLoadingGames, setIsLoadingGames] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [league, setLeague] = useState("");
-  const [season, setSeason] = useState("");
+  
+  // Upload form fields (for CSV upload only)
+  const [uploadLeague, setUploadLeague] = useState("");
+  const [uploadSeason, setUploadSeason] = useState("");
   const [dateStr, setDateStr] = useState("");
-  const [homeTeam, setHomeTeam] = useState("");
-  const [awayTeam, setAwayTeam] = useState("");
+  
+  // View filters (for displaying data - optional, shows ALL if empty)
+  const [viewLeague, setViewLeague] = useState("");
+  const [viewSeason, setViewSeason] = useState("");
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { uploads, addUpload, clearHistory } = useUploadHistory();
 
-  useEffect(() => {
-    loadStats();
-    loadTeams();
-    loadGames();
-  }, [league]);
+  // Use React Query hooks - use view filters (empty = show ALL data)
+  const { data: leaderboardData = [], isLoading: isLoadingStats, error: statsError, refetch: refetchStats } = useLeaderboard(
+    viewLeague.trim() || undefined,
+    viewSeason.trim() || undefined,
+    selectedTeam
+  );
+  const { data: teams = [], isLoading: isLoadingTeams } = useTeams(viewLeague.trim() || undefined, viewSeason.trim() || undefined);
+  const { data: games = [], isLoading: isLoadingGames } = useGames(
+    viewLeague.trim() || undefined,
+    viewSeason.trim() || undefined
+  );
+  
+  const { data: selectedStoryline, isLoading: isLoadingStoryline, error: storylineError } = useGameStorylines(
+    selectedGameId ? Number(selectedGameId) : ""
+  );
+  
+  const uploadMutation = useUploadGameCsv();
+  const createStorylineMutation = useCreateGameStorylines();
 
-  useEffect(() => {
-    loadStats();
-    loadGames();
-  }, [league, season]);
+  // Transform leaderboard data to match HitterLeaderboard component format
+  const hitterStats = leaderboardData.map((entry: LeaderboardEntry) => ({
+    player_name: entry.player_name,
+    team_name: entry.team,
+    games_played: entry.games,
+    ab: entry.AB,
+    h: entry.H,
+    avg: entry.AVG,
+    hr: entry.HR,
+    rbi: entry.RBI,
+    obp: entry.OBP,
+    slg: entry.SLG,
+    ops: entry.OPS,
+  }));
 
-  const loadStats = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const stats = await getTotals(league.trim() || undefined, season.trim() || undefined);
-      setHitterStats(stats);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to load stats";
-      setError(errorMessage);
-      toast({
-        title: "Error loading stats",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadTeams = async () => {
-    setIsLoadingTeams(true);
-    try {
-      const teamList = await fetchTeams(league.trim() || undefined);
-      setTeams(teamList);
-    } catch (err) {
-      console.error("Failed to load teams:", err);
-      setTeams([]);
-    } finally {
-      setIsLoadingTeams(false);
-    }
-  };
-
-  const loadGames = async () => {
-    setIsLoadingGames(true);
-    try {
-      const gamesList = await fetchGames(league.trim() || undefined, season.trim() || undefined);
-      setGames(gamesList || []);
-    } catch (err) {
-      console.error("Failed to load games:", err);
-      setGames([]);
-    } finally {
-      setIsLoadingGames(false);
-    }
-  };
-
-  const handleGameClick = async (gameId: string | number) => {
+  const handleGameClick = (gameId: string | number) => {
     setSelectedGameId(String(gameId));
-    setIsLoadingStoryline(true);
-    setSelectedStoryline(null);
-    setStorylineError(null);
-    
-    try {
-      // Try to fetch existing storylines
-      let storyline = await fetchGameStorylines(gameId);
-      
-      // If no storylines exist, create them
-      if (!storyline) {
-        toast({
-          title: "Generating game recap...",
-          description: "This may take a moment",
-        });
-        try {
-          storyline = await createGameStorylines(gameId);
-          toast({
-            title: "Recap generated!",
-            description: "Game recap is ready",
-          });
-        } catch (createErr) {
-          console.error("Failed to create storylines:", createErr);
-          const createErrorMsg = createErr instanceof Error ? createErr.message : "Failed to generate recap";
-          setStorylineError(createErrorMsg);
-          throw createErr;
-        }
-      }
-      
-      setSelectedStoryline(storyline);
-    } catch (err) {
-      console.error("Failed to load game storylines:", err);
-      const errorMessage = err instanceof Error ? err.message : "Failed to load game recap";
-      setStorylineError(errorMessage);
-      toast({
-        title: "Error loading game recap",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingStoryline(false);
-    }
+    // Storylines will load automatically via the useGameStorylines hook
+    // User can click "Generate Recap" button if none exist
   };
 
   const handleFileSelect = () => {
@@ -149,83 +88,69 @@ const Dashboard = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
-    setError(null);
-
-    // Validate upload form fields - all required
-    if (!league.trim() || !season.trim() || !dateStr || !homeTeam.trim() || !awayTeam.trim()) {
-      const errorMsg = "All fields are required: League, Season, Date, Home Team, and Away Team";
-      setError(errorMsg);
+    // Validate upload form fields - teams are now auto-detected from CSV
+    if (!uploadLeague.trim() || !uploadSeason.trim() || !dateStr) {
+      const errorMsg = "All fields are required: League, Season, and Date. Teams are automatically detected from CSV.";
       toast({
         title: "Upload failed",
         description: errorMsg,
         variant: "destructive",
       });
-      setIsUploading(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
       return;
     }
 
+    const metadata: UploadMetadata = {
+      league: uploadLeague.trim(),
+      season: uploadSeason.trim(),
+      date_str: dateStr,
+      // Teams are optional - will be auto-detected from CSV
+    };
+
     try {
-      console.log("Uploading CSV:", {
-        fileName: file.name,
-        league,
-        season,
-        dateStr,
-        homeTeam,
-        awayTeam,
-      });
-      await uploadCSV(file, {
-        league,
-        season,
-        date_str: dateStr,
-        home_team: homeTeam,
-        away_team: awayTeam,
-      });
+      await uploadMutation.mutateAsync({ file, metadata });
 
       // Add to upload history
-      addUpload({
-        fileName: file.name,
-        teamName: homeTeam,
-        opponent: awayTeam,
-        gameDate: dateStr,
-      });
+        // Extract team names from response message if available
+        const message = uploadMutation.data?.message || "";
+        const teamMatch = message.match(/(\w+)\s+vs\s+(\w+)/);
+        addUpload({
+          fileName: file.name,
+          teamName: teamMatch ? teamMatch[1] : "Unknown",
+          opponent: teamMatch ? teamMatch[2] : "Unknown",
+          gameDate: dateStr,
+        });
 
       toast({
         title: "Upload successful",
-        description: "CSV file processed successfully",
+        description: uploadMutation.data?.message || "CSV file processed successfully",
       });
       
-      // Reload stats, teams, and games after successful upload
-      await loadStats();
-      await loadTeams();
-      await loadGames();
-      
-      // Clear form fields
-      setDateStr("");
-      setHomeTeam("");
-      setAwayTeam("");
-      
-      // Switch to leaderboard tab to show updated stats
+      // Switch to leaderboard tab to show new data
       setSelectedTab("leaderboard");
+      
+      // Clear upload form fields only (keep view filters as they are)
+      setDateStr("");
+      setUploadLeague("");
+      setUploadSeason("");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Upload failed";
-      setError(errorMessage);
       toast({
         title: "Upload failed",
         description: errorMessage,
         variant: "destructive",
       });
     } finally {
-      setIsUploading(false);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     }
   };
+
+  const errorMessage = statsError instanceof Error ? statsError.message : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -235,7 +160,7 @@ const Dashboard = () => {
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-foreground">Baseball League Dashboard</h2>
           <p className="text-muted-foreground">
-            {league ? `${league}${season ? ` - ${season} Season` : ""}` : "All Leagues"}
+            {viewLeague ? `${viewLeague}${viewSeason ? ` - ${viewSeason} Season` : ""}` : "All Leagues & Seasons"}
           </p>
         </div>
 
@@ -274,32 +199,59 @@ const Dashboard = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={loadStats}
-                    disabled={isLoading}
+                    onClick={() => refetchStats()}
+                    disabled={isLoadingStats}
                     className="gap-2"
                   >
-                    <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                    <RefreshCw className={`h-4 w-4 ${isLoadingStats ? "animate-spin" : ""}`} />
                     Refresh
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                {error && (
+                {errorMessage && (
                   <Alert variant="destructive" className="mb-4">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
+                    <AlertDescription>{errorMessage}</AlertDescription>
                   </Alert>
                 )}
-                {isLoading ? (
+                
+                {/* Team Filter - Show loading state or filter */}
+                <div className="mb-6">
+                  {isLoadingTeams ? (
+                    <div className="text-sm text-muted-foreground">Loading teams...</div>
+                  ) : teams.length > 0 ? (
+                    <TeamFilter
+                      teams={teams.map((t: any) => t.name)}
+                      selectedTeam={selectedTeam}
+                      onTeamChange={setSelectedTeam}
+                    />
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      No teams found. Upload a CSV to get started.
+                    </div>
+                  )}
+                </div>
+                
+                {isLoadingStats ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
                     Loading stats...
                   </div>
                 ) : hitterStats.length === 0 ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    No stats available. Upload a CSV to get started.
+                    {selectedTeam 
+                      ? `No stats available for ${selectedTeam}. Try selecting a different team or uploading CSV data.`
+                      : "No stats available. Upload a CSV to get started."
+                    }
                   </div>
                 ) : (
-                  <HitterLeaderboard hitters={hitterStats} />
+                  <>
+                    <HitterLeaderboard hitters={hitterStats} />
+                    <div className="mt-4 text-sm text-muted-foreground">
+                      Showing {hitterStats.length} player{hitterStats.length !== 1 ? "s" : ""}
+                      {selectedTeam && ` from ${selectedTeam}`}
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -322,16 +274,38 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {teams.map((teamName, index) => (
+                    {teams.map((team, index) => (
                       <Card key={index} className="transition-all hover:shadow-md hover:border-primary/50">
                         <CardHeader className="pb-3">
                           <CardTitle className="flex items-center gap-2 text-lg">
                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
                               <Users className="h-4 w-4 text-primary" />
                             </div>
-                            {teamName}
+                            {team.name}
                           </CardTitle>
                         </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Record:</span>
+                              <span className="font-semibold">{team.wins}-{team.losses}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Win %:</span>
+                              <span className="font-semibold">{(team.win_pct * 100).toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Runs Scored:</span>
+                              <span className="font-semibold">{team.runs_scored}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Run Diff:</span>
+                              <span className={`font-semibold ${team.run_differential >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {team.run_differential > 0 ? '+' : ''}{team.run_differential}
+                              </span>
+                            </div>
+                          </div>
+                        </CardContent>
                       </Card>
                     ))}
                   </div>
@@ -379,53 +353,60 @@ const Dashboard = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {error && (
+                {uploadMutation.isError && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
+                    <AlertDescription>
+                      {uploadMutation.error instanceof Error
+                        ? uploadMutation.error.message
+                        : "Upload failed"}
+                    </AlertDescription>
                   </Alert>
                 )}
                 
-                <div className="space-y-6">
+                  <div className="space-y-6">
                   <div className="rounded-lg border border-border bg-muted/30 p-4">
-                    <p className="text-sm font-semibold mb-3">View Filters (optional - leave empty to see all data)</p>
+                    <p className="text-sm font-semibold mb-3">View Filters (optional - leave empty to see ALL data from all uploads)</p>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="filterLeague">League Filter</Label>
                         <Input
                           id="filterLeague"
-                          placeholder="e.g., Pnw Winter League"
-                          value={league}
-                          onChange={(e) => setLeague(e.target.value)}
-                          disabled={isUploading}
+                          placeholder="Leave empty to see all leagues"
+                          value={viewLeague}
+                          onChange={(e) => setViewLeague(e.target.value)}
+                          disabled={uploadMutation.isPending}
                         />
-                        <p className="text-xs text-muted-foreground">Filter view by league (optional)</p>
+                        <p className="text-xs text-muted-foreground">Filter view by league (optional - empty shows ALL)</p>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="filterSeason">Season Filter</Label>
                         <Input
                           id="filterSeason"
-                          placeholder="e.g., 2025"
-                          value={season}
-                          onChange={(e) => setSeason(e.target.value)}
-                          disabled={isUploading}
+                          placeholder="Leave empty to see all seasons"
+                          value={viewSeason}
+                          onChange={(e) => setViewSeason(e.target.value)}
+                          disabled={uploadMutation.isPending}
                         />
-                        <p className="text-xs text-muted-foreground">Filter view by season (optional)</p>
+                        <p className="text-xs text-muted-foreground">Filter view by season (optional - empty shows ALL)</p>
                       </div>
                     </div>
                   </div>
                   
                   <div className="space-y-4">
-                    <p className="text-sm font-semibold">Upload Game Data (required fields)</p>
+                    <p className="text-sm font-semibold">Upload Game Data (teams are automatically detected from CSV)</p>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Ensure your CSV is in HitTrax format with two team sections. Teams are automatically detected from the header rows containing "Batting Order". The system will automatically detect and separate them.
+                    </p>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       <div className="space-y-2">
                         <Label htmlFor="uploadLeague">League *</Label>
                         <Input
                           id="uploadLeague"
                           placeholder="e.g., Pnw Winter League"
-                          value={league}
-                          onChange={(e) => setLeague(e.target.value)}
-                          disabled={isUploading}
+                          value={uploadLeague}
+                          onChange={(e) => setUploadLeague(e.target.value)}
+                          disabled={uploadMutation.isPending}
                           required
                         />
                       </div>
@@ -434,9 +415,9 @@ const Dashboard = () => {
                         <Input
                           id="uploadSeason"
                           placeholder="e.g., 2025"
-                          value={season}
-                          onChange={(e) => setSeason(e.target.value)}
-                          disabled={isUploading}
+                          value={uploadSeason}
+                          onChange={(e) => setUploadSeason(e.target.value)}
+                          disabled={uploadMutation.isPending}
                           required
                         />
                       </div>
@@ -447,32 +428,11 @@ const Dashboard = () => {
                           type="date"
                           value={dateStr}
                           onChange={(e) => setDateStr(e.target.value)}
-                          disabled={isUploading}
+                          disabled={uploadMutation.isPending}
                           required
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="homeTeam">Home Team *</Label>
-                        <Input
-                          id="homeTeam"
-                          placeholder="e.g., Blue Jays"
-                          value={homeTeam}
-                          onChange={(e) => setHomeTeam(e.target.value)}
-                          disabled={isUploading}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="awayTeam">Away Team *</Label>
-                        <Input
-                          id="awayTeam"
-                          placeholder="e.g., Red Sox"
-                          value={awayTeam}
-                          onChange={(e) => setAwayTeam(e.target.value)}
-                          disabled={isUploading}
-                          required
-                        />
-                      </div>
+                      {/* Teams are now automatically detected from CSV - no input needed */}
                     </div>
                   </div>
                   
@@ -492,9 +452,9 @@ const Dashboard = () => {
                     <Button 
                       className="mt-4" 
                       onClick={handleFileSelect}
-                      disabled={isUploading}
+                      disabled={uploadMutation.isPending}
                     >
-                      {isUploading ? "Uploading..." : "Select File"}
+                      {uploadMutation.isPending ? "Uploading..." : "Select File"}
                     </Button>
                   </div>
 
@@ -541,34 +501,66 @@ const Dashboard = () => {
 
       <Dialog open={!!selectedGameId} onOpenChange={() => {
         setSelectedGameId(null);
-        setSelectedStoryline(null);
-        setStorylineError(null);
       }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Game Recap</DialogTitle>
           </DialogHeader>
-          {isLoadingStoryline ? (
+          {(isLoadingStoryline || createStorylineMutation.isPending) && !selectedStoryline ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
-              Loading game recap...
+              {createStorylineMutation.isPending 
+                ? "Generating game recap..." 
+                : "Loading game recap..."}
             </div>
-          ) : storylineError ? (
+          ) : (storylineError || createStorylineMutation.isError) && !selectedStoryline ? (
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <p className="text-destructive font-semibold">Error loading recap</p>
-              <p className="text-muted-foreground text-sm text-center">{storylineError}</p>
+              <p className="text-muted-foreground text-sm text-center">
+                {storylineError instanceof Error
+                  ? storylineError.message
+                  : createStorylineMutation.error instanceof Error
+                  ? createStorylineMutation.error.message
+                  : "Failed to load game recap"}
+              </p>
               <p className="text-muted-foreground text-xs text-center">
-                {storylineError.includes("OpenAI") || storylineError.includes("API key")
+                {((storylineError instanceof Error && storylineError.message.includes("OpenAI")) ||
+                  (createStorylineMutation.error instanceof Error &&
+                    createStorylineMutation.error.message.includes("OpenAI"))) ||
+                (createStorylineMutation.error instanceof Error &&
+                  createStorylineMutation.error.message.includes("API key"))
                   ? "Please configure OPENAI_API_KEY in the backend .env file to generate recaps."
                   : "Please try again or check the backend logs for more details."}
               </p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (selectedGameId) {
+                    createStorylineMutation.mutate(selectedGameId);
+                  }
+                }}
+                disabled={createStorylineMutation.isPending}
+              >
+                {createStorylineMutation.isPending ? "Generating..." : "Try Again"}
+              </Button>
             </div>
           ) : selectedStoryline ? (
             <GameStorylineCard storyline={selectedStoryline} />
-          ) : (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              No recap available for this game.
+          ) : !isLoadingStoryline && !createStorylineMutation.isPending ? (
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <p className="text-muted-foreground">No recap available for this game.</p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (selectedGameId) {
+                    createStorylineMutation.mutate(selectedGameId);
+                  }
+                }}
+                disabled={createStorylineMutation.isPending}
+              >
+                {createStorylineMutation.isPending ? "Generating..." : "Generate Recap"}
+              </Button>
             </div>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>

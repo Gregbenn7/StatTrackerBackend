@@ -1,9 +1,12 @@
+"""Response schemas."""
+
 from typing import Optional, List
-from pydantic import BaseModel
 from datetime import date, datetime
+from pydantic import BaseModel
 
 
 class UploadCsvResponse(BaseModel):
+    """Response schema for CSV upload."""
     game_id: int
     rows_ingested: int
     message: str
@@ -14,6 +17,7 @@ CsvUploadResponse = UploadCsvResponse
 
 
 class LeaderboardEntry(BaseModel):
+    """Leaderboard entry response schema."""
     player_id: int
     player_name: str
     team: str
@@ -29,6 +33,7 @@ class LeaderboardEntry(BaseModel):
 
 
 class PlayerBasic(BaseModel):
+    """Basic player information."""
     id: int
     name: str
     team: str
@@ -36,6 +41,7 @@ class PlayerBasic(BaseModel):
 
 
 class PlayerStats(BaseModel):
+    """Player statistics response schema."""
     player_id: int
     player_name: str
     team: str
@@ -66,6 +72,7 @@ class PlayerStats(BaseModel):
 
 
 class PlayerDetail(BaseModel):
+    """Detailed player information with stats."""
     id: int
     name: str
     team: str
@@ -75,6 +82,7 @@ class PlayerDetail(BaseModel):
 
 
 class GameBasic(BaseModel):
+    """Basic game information."""
     id: int
     league: str
     season: str
@@ -84,6 +92,7 @@ class GameBasic(BaseModel):
 
 
 class PlateAppearanceDetail(BaseModel):
+    """Plate appearance detail for game responses."""
     id: int
     player_name: str
     team: str
@@ -95,6 +104,7 @@ class PlateAppearanceDetail(BaseModel):
 
 
 class GameDetail(BaseModel):
+    """Detailed game information with plate appearances."""
     id: int
     league: str
     season: str
@@ -106,6 +116,7 @@ class GameDetail(BaseModel):
 
 
 class StorylineSummary(BaseModel):
+    """Storyline summary extracted from JSON."""
     recap: str
     key_storylines: List[str]
     player_of_game: str
@@ -113,6 +124,7 @@ class StorylineSummary(BaseModel):
 
 
 class GameStorylinesResponse(BaseModel):
+    """Game storylines response schema."""
     game_id: int
     storylines_text: str
     json_summary: str
@@ -121,6 +133,7 @@ class GameStorylinesResponse(BaseModel):
 
 
 class ScoutingReportResponse(BaseModel):
+    """Scouting report response schema."""
     player_id: int
     report: str
 

@@ -1,20 +1,38 @@
-# Baseball League API
+# Baseball League Stat Tracker
 
-A FastAPI-based backend API for managing a HitTrax-based adult baseball league. This API handles game CSV uploads, computes season-long hitting statistics, provides leaderboards, and generates AI-powered storylines using OpenAI.
+A full-stack application for managing a HitTrax-based adult baseball league. The application consists of a FastAPI backend API and a React frontend that handles game CSV uploads, computes season-long hitting statistics, provides leaderboards, and generates AI-powered storylines using OpenAI.
+
+## 🎯 Current Status
+
+**✅ Backend Refactoring Complete** - Clean architecture with in-memory storage
+**✅ Frontend Services Refactored** - TypeScript types, API services, React Query hooks
+**⚠️ Components Need Updates** - Components still use old API (see REFACTORING_SUMMARY.md)
 
 ## Features
 
+### Backend (FastAPI)
 - 📊 CSV game data ingestion from HitTrax exports
-- 🗄️ Relational database storage (SQLite by default, Postgres-ready)
 - 📈 Automatic stat computation (AVG, OBP, SLG, OPS, etc.)
 - 🏆 Leaderboard endpoints with filtering
 - 📝 AI-generated game storylines using OpenAI
 - 👤 Player scouting reports
 - 🔄 CORS support for frontend integration
+- 💾 **In-memory storage** (data resets on server restart)
+
+### Frontend (React)
+- 🎨 Modern UI built with React, TypeScript, and Tailwind CSS
+- 📱 Responsive design with shadcn/ui components
+- 📊 Interactive leaderboards and player statistics
+- 📤 CSV file upload interface for game data
+- 🎮 Game history and storyline viewer
+- 📈 Real-time data fetching with React Query
+- 🧭 Client-side routing with React Router
 
 ## Installation
 
-1. **Clone or navigate to the project directory**
+### Backend Setup
+
+1. **Navigate to the project root directory**
 
 2. **Create a virtual environment (recommended)**
    ```bash
@@ -27,7 +45,7 @@ A FastAPI-based backend API for managing a HitTrax-based adult baseball league. 
    source venv/bin/activate
    ```
 
-3. **Install dependencies**
+3. **Install Python dependencies**
    ```bash
    pip install -r requirements.txt
    ```
@@ -37,21 +55,39 @@ A FastAPI-based backend API for managing a HitTrax-based adult baseball league. 
    Create a `.env` file in the project root:
    ```env
    OPENAI_API_KEY=your_openai_api_key_here
-   FRONTEND_ORIGIN=http://localhost:3000
-   DATABASE_URL=sqlite:///./baseball_league.db
+   FRONTEND_ORIGIN=http://localhost:8080
+   ```
+
+### Frontend Setup
+
+1. **Navigate to the frontend directory**
+   ```bash
+   cd frontend
+   ```
+
+2. **Install Node.js dependencies**
+   
+   Make sure you have [Node.js](https://nodejs.org/) installed (v18 or higher recommended), then:
+   ```bash
+   npm install
+   ```
+
+3. **Configure frontend environment (optional)**
+   
+   Create a `.env` file in the `frontend/` directory to customize the API URL:
+   ```env
+   VITE_API_BASE_URL=http://localhost:8000
    ```
    
-   **Note:** For production with Postgres/Supabase, update `DATABASE_URL`:
-   ```env
-   DATABASE_URL=postgresql://user:password@localhost/dbname
-   # or for Supabase:
-   DATABASE_URL=postgresql://postgres:password@db.xxxxx.supabase.co:5432/postgres
-   ```
+   If not set, the frontend defaults to `http://localhost:8000`.
 
 ## Running the Application
 
-Start the FastAPI server with:
+### Backend
+
+Start the FastAPI server from the project root:
 ```bash
+# Make sure your virtual environment is activated
 uvicorn app.main:app --reload
 ```
 
@@ -60,14 +96,119 @@ The API will be available at:
 - **Interactive API docs:** http://localhost:8000/docs
 - **Alternative docs:** http://localhost:8000/redoc
 
+### Frontend
+
+Start the development server from the `frontend/` directory:
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend will be available at:
+- **Web App:** http://localhost:8080
+
+### Running Both (Development)
+
+For local development, you'll need to run both servers simultaneously:
+
+**Terminal 1 (Backend):**
+```bash
+# From project root
+uvicorn app.main:app --reload
+```
+
+**Terminal 2 (Frontend):**
+```bash
+# From frontend directory
+cd frontend
+npm run dev
+```
+
+## Architecture
+
+### Backend Structure
+
+```
+app/
+├── core/                  # Core functionality
+│   ├── config.py          # Settings using pydantic-settings
+│   └── exceptions.py      # Custom exception classes
+│
+├── api/                   # API layer
+│   ├── routes/            # API routes
+│   │   ├── games.py       # Game endpoints
+│   │   ├── players.py     # Player endpoints
+│   │   ├── stats.py       # Stats/leaderboard endpoints
+│   │   └── storylines.py  # Storyline endpoints
+│   └── deps.py            # Dependency injection
+│
+├── models/                # Pydantic models
+│   ├── player.py
+│   ├── game.py
+│   ├── plate_appearance.py
+│   ├── stats.py
+│   └── storyline.py
+│
+├── repositories/          # Data access layer
+│   ├── game_repository.py
+│   ├── player_repository.py
+│   └── stats_repository.py
+│
+├── services/              # Business logic layer
+│   ├── game_service.py
+│   ├── player_service.py
+│   ├── stats_service.py
+│   ├── ingest_service.py
+│   └── storyline_service.py
+│
+├── storage/               # In-memory storage
+│   └── memory_store.py
+│
+└── utils/                 # Utility functions
+    ├── csv_helpers.py
+    └── stat_calculators.py
+```
+
+### Frontend Structure
+
+```
+src/
+├── config/                # Configuration
+│   ├── env.ts            # Environment variables
+│   └── routes.ts         # Route constants
+│
+├── types/                 # TypeScript types
+│   ├── game.types.ts
+│   ├── player.types.ts
+│   ├── stats.types.ts
+│   └── api.types.ts
+│
+├── services/              # API service layer
+│   ├── api.ts            # API client
+│   ├── gameService.ts
+│   ├── playerService.ts
+│   ├── statsService.ts
+│   └── teamService.ts
+│
+├── hooks/                 # React Query hooks
+│   ├── useGames.ts
+│   ├── usePlayers.ts
+│   ├── useStats.ts
+│   └── useTeams.ts
+│
+├── components/            # React components
+├── pages/                 # Page components
+└── lib/                   # Utilities
+```
+
 ## API Endpoints
 
 ### Game Management
 
 - **POST `/games/upload_csv`** - Upload a CSV file with game stats
-  - Form data: `file` (CSV), `league`, `season`, `date` (YYYY-MM-DD), `home_team`, `away_team`
+  - Form data: `file` (CSV), `league`, `season`, `date_str` (YYYY-MM-DD), `home_team`, `away_team`
   
-- **GET `/games`** - List recent games (supports `limit` and `offset` query params)
+- **GET `/games`** - List recent games (supports `limit`, `offset`, `league`, `season` query params)
 
 - **GET `/games/{game_id}`** - Get game details with plate appearances
 
@@ -79,11 +220,16 @@ The API will be available at:
 ### Players
 
 - **GET `/players`** - List all players with stats
-  - Query params: `league` (optional), `season` (optional)
+  - Query params: `league` (optional), `season` (optional), `team` (optional)
 
 - **GET `/players/{player_id}`** - Get player details with all season stats
 
 - **GET `/players/{player_id}/scouting_report`** - Generate AI scouting report
+
+### Teams
+
+- **GET `/teams`** - Get list of unique teams
+  - Query params: `league` (optional)
 
 ### Storylines
 
@@ -115,26 +261,9 @@ The CSV upload endpoint expects a CSV file with the following columns (column na
 - SB (stolen bases)
 - CS (caught stealing)
 
-The ingestion logic automatically normalizes column names, so variations like "SO" vs "K", "2B" vs "double", etc. are handled automatically.
+## Data Storage
 
-## Database Schema
-
-The application uses SQLModel (which builds on SQLAlchemy) with the following models:
-
-- **Player** - Player information (name, team, league)
-- **Game** - Game metadata (date, teams, league, season)
-- **PlateAppearance** - Individual game stat lines per player
-- **HitterTotal** - Season-long aggregated stats per player/league/season
-- **GameStorylines** - AI-generated game storylines and summaries
-
-## Database
-
-By default, the application uses SQLite (`baseball_league.db` in the project root). The database is created automatically on first run.
-
-To use PostgreSQL or Supabase:
-1. Update `DATABASE_URL` in your `.env` file
-2. Ensure the database is created and accessible
-3. The application will automatically use the new database
+**⚠️ Important:** The application currently uses **in-memory storage**. All data persists only during runtime and will be lost when the server restarts. This is intentional for the current architecture - if you need persistent storage, you can integrate a database by modifying the storage layer.
 
 ## Stat Calculations
 
@@ -150,43 +279,61 @@ Where:
 - **Singles** = H - doubles - triples - HR
 - **PA** (Plate Appearances) = AB + BB + HBP + SF + SH
 
-## Development
-
-The project structure:
-```
-.
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI app and endpoints
-│   ├── models.py            # SQLModel database models
-│   ├── schemas.py           # Pydantic response models
-│   ├── database.py          # Database engine and session management
-│   ├── ingest.py            # CSV parsing and ingestion logic
-│   └── services/
-│       ├── __init__.py
-│       ├── stats.py         # Stat computation helpers
-│       └── storylines.py    # AI storyline generation
-├── requirements.txt
-├── README.md
-└── .env                     # Environment variables (create this)
-```
-
 ## Troubleshooting
+
+### Backend Issues
 
 **Issue: OpenAI API errors**
 - Ensure `OPENAI_API_KEY` is set in your `.env` file
 - Verify your OpenAI API key is valid and has credits
 
-**Issue: Database errors**
-- Delete `baseball_league.db` to reset the database (all data will be lost)
-- For Postgres, ensure the database exists and connection string is correct
+**Issue: CORS errors**
+- Ensure `FRONTEND_ORIGIN` in `.env` matches your frontend URL (default: `http://localhost:8080`)
+- Restart the backend server after changing `.env` file
 
 **Issue: CSV upload fails**
 - Check that required columns (player name, team, AB, H, HR) are present
 - Ensure date format is YYYY-MM-DD
 - Check server logs for specific row errors
 
+### Frontend Issues
+
+**Issue: Frontend can't connect to backend**
+- Ensure the backend is running on port 8000
+- Check that `VITE_API_BASE_URL` in `frontend/.env` matches your backend URL
+- Check browser console for CORS or network errors
+
+**Issue: Dependencies installation fails**
+- Ensure you have Node.js v18+ installed
+- Try deleting `node_modules` and `package-lock.json`, then run `npm install` again
+
+## Development
+
+### Building for Production
+
+**Frontend:**
+```bash
+cd frontend
+npm run build
+```
+
+This creates an optimized production build in the `frontend/dist/` directory.
+
+**Backend:**
+```bash
+# Production server (using uvicorn with workers)
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+## Refactoring Notes
+
+See `REFACTORING_SUMMARY.md` for details on the recent refactoring:
+- Removed database dependencies
+- Implemented in-memory storage
+- Reorganized code structure
+- Added React Query hooks
+- TypeScript type system
+
 ## License
 
 MIT
-
